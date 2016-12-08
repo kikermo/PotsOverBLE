@@ -16,12 +16,12 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
         setContentView(R.layout.activity_main);
 
         value = (TextView) findViewById(R.id.value);
-        ((SeekBar)findViewById(R.id.pot)).setOnSeekBarChangeListener(this);
+        ((SeekBar) findViewById(R.id.pot)).setOnSeekBarChangeListener(this);
     }
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-
+        value.setText(i + "%");
     }
 
     @Override
