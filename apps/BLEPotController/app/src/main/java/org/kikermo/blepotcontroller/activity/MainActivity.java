@@ -18,9 +18,9 @@ import org.kikermo.blepotcontroller.utils.Utils;
 
 import java.util.UUID;
 
+import rx.Observable;
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
-import rx.schedulers.Schedulers;
 import rx.subscriptions.CompositeSubscription;
 
 import static com.polidea.rxandroidble.RxBleConnection.RxBleConnectionState.CONNECTED;
@@ -30,6 +30,7 @@ import static org.kikermo.blepotcontroller.utils.Constants.UUID_CHARACTERISTIC;
 
 public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBarChangeListener {
     private TextView value;
+    private SeekBar pot;
 
     private BluetoothDevice device;
 
@@ -39,6 +40,8 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
 
     private static final String TAG = "MainActivity";
 
+    private boolean connected = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -46,7 +49,9 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
         rxBleClient = ((BLEPotControllerApplication) getApplication()).getRxBleClient();
 
         value = (TextView) findViewById(R.id.value);
-        ((SeekBar) findViewById(R.id.pot)).setOnSeekBarChangeListener(this);
+        pot = ((SeekBar) findViewById(R.id.pot));
+
+        pot.setOnSeekBarChangeListener(this);
 
         bleSubscription = new CompositeSubscription();
 
@@ -54,7 +59,6 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
             device = savedInstanceState.getParcelable(BK_DEVICE);
         else
             device = getIntent().getParcelableExtra(BK_DEVICE);
-
     }
 
     @Override
@@ -67,15 +71,14 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
     protected void onStart() {
         super.onStart();
 
-
-        bleSubscription.add(establishConnection());
+        bleSubscription.add(establishConnectionAndSubscribeToNotifications());
         bleSubscription.add(subscribeToConnectionState());
-
     }
 
     @Override
     protected void onStop() {
         bleSubscription.clear();
+        connected = false;
         super.onStop();
     }
 
@@ -88,12 +91,15 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
     }
 
     @Override
-    public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+    public void onProgressChanged(SeekBar seekBar, int i, boolean fromUser) {
         value.setText(i + "%");
 
-        byte[] data = new byte[]{Utils.percentageToByte(i)};
-        Subscription writeSubs = connection.writeCharacteristic(UUID.fromString(UUID_CHARACTERISTIC), data).subscribe();
-        bleSubscription.add(writeSubs);
+        if (fromUser && connected) {
+            byte[] data = new byte[]{Utils.percentageToByte(i)};
+            Subscription writeSubs = connection.writeCharacteristic(UUID.fromString(UUID_CHARACTERISTIC), data).subscribe(o -> {
+            }, throwable -> Log.w(TAG, throwable));
+            bleSubscription.add(writeSubs);
+        }
     }
 
     @Override
@@ -106,13 +112,25 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
 
     }
 
-    private Subscription establishConnection() {
-        Subscription subscription = rxBleClient.getBleDevice(device.getAddress())
+    private Subscription establishConnectionAndSubscribeToNotifications() {
+        Observable<RxBleConnection> bleObservable = rxBleClient.getBleDevice(device.getAddress())
                 .establishConnection(this, false)
-                .share()
-                .subscribe(connection -> this.connection = connection,
-                        throwable -> Log.w(TAG, throwable.toString()));
+                .share();
 
+        final UUID uuid = UUID.fromString(UUID_CHARACTERISTIC);
+
+        Subscription subscription = bleObservable
+                .doOnNext(connection -> this.connection = connection)
+                .flatMap(connection ->
+                        Observable.merge(connection.readCharacteristic(uuid),
+                                connection.setupNotification(uuid).flatMap(notificationObservable -> notificationObservable)))
+                .filter(Utils::notNull)
+                .filter(bytes -> bytes.length > 0)
+                .map(bytes -> bytes[0])
+                .map(Utils::byteToPercentage)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(progress -> pot.setProgress(progress),
+                        throwable -> Log.w(TAG, throwable));
         return subscription;
 
     }
@@ -124,16 +142,18 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
                 .observeConnectionStateChanges()
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(connectionState -> {
-                            if (connectionState.equals(CONNECTED))
+                            if (connectionState.equals(CONNECTED)) {
                                 showToast("Connected");
-                            else if (connectionState.equals(DISCONNECTED)) {
+                                connected = true;
+                            } else if (connectionState.equals(DISCONNECTED)) {
                                 showToast("Disconnected");
+                                connected = false;
                                 Intent intent = new Intent(this, SelectServiceActivity.class);
                                 startActivity(intent);
                                 finish();
                             }
                         },
-                        throwable -> Log.w(TAG, throwable.toString())
+                        throwable -> Log.w(TAG, throwable)
                 );
         return subscription;
 

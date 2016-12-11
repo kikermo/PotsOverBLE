@@ -13,10 +13,15 @@ public class Utils {
         return (object == null);
     }
 
-    public static byte percentageToByte(int percentage){
-        if(percentage<0) percentage=0;
-        if(percentage>100) percentage=100;
+    public static byte percentageToByte(int percentage) {
+        if (percentage < 0) percentage = 0;
+        if (percentage > 100) percentage = 100;
 
-        return (byte) ((percentage*255)/100);
+        return (byte) ((percentage * 255) / 100);
+    }
+
+    public static int byteToPercentage(byte mByte) {
+
+        return ((mByte * 100) / 255);
     }
 }

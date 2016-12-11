@@ -28,7 +28,7 @@ import org.kikermo.blepotcontroller.adapter.BluetoothDeviceAdapter;
 
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+
 
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
@@ -113,6 +113,10 @@ public class SelectServiceActivity extends AppCompatActivity implements AdapterV
     @Override
     public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
         BluetoothDevice bleDevice = (BluetoothDevice) adapterView.getItemAtPosition(i);
+
+        if (bleDevice.getBondState() != BluetoothDevice.BOND_BONDED)  //This is important in order to be able to subscribe to notifications
+            bleDevice.createBond();
+
         Intent intent = new Intent(this, MainActivity.class);
         intent.putExtra(BK_DEVICE, bleDevice);
         startActivity(intent);
