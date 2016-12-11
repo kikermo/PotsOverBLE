@@ -14,7 +14,6 @@ SoftwareSerial bleSerial(2, 3); // RX, TX
 // set pot select pin
 const int potSS = 10;
 
-//const int potWriteCmd = B00100011;
 const int potWriteCmd = B00010011;
 
 void setup() {
@@ -48,6 +47,8 @@ void loop() {
     int val = bleSerial.read();
     Serial.write("value = ");
     Serial.print(val,DEC);
+    Serial.write("\r\n");
+
     digitalPotWrite(val);
   }
   
