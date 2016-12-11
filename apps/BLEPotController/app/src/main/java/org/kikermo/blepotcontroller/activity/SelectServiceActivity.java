@@ -71,7 +71,6 @@ public class SelectServiceActivity extends AppCompatActivity implements AdapterV
     @Override
     protected void onResume() {
         super.onResume();
-
         bleDiscoverySubscription = subscribeToBLEDiscovery();
 
     }
@@ -117,6 +116,7 @@ public class SelectServiceActivity extends AppCompatActivity implements AdapterV
         Intent intent = new Intent(this, MainActivity.class);
         intent.putExtra(BK_DEVICE, bleDevice);
         startActivity(intent);
+        finish();
     }
 
 
@@ -141,8 +141,8 @@ public class SelectServiceActivity extends AppCompatActivity implements AdapterV
 
                     bleDiscoverySubscription = subscribeToBLEDiscovery();
                 } else {
-
-                    Toast.makeText(this, "You have to grant location permissions in order to search for devices", Toast.LENGTH_SHORT).show();
+                    Snackbar snackbar = Snackbar.make(listView, "You have to grant location permissions in order to search for devices", Snackbar.LENGTH_SHORT);
+                    snackbar.show();
                 }
 
                 break;
