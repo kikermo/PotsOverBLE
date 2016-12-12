@@ -22,6 +22,6 @@ public class Utils {
 
     public static int byteToPercentage(byte mByte) {
 
-        return ((mByte * 100) / 255);
+        return (((mByte & 0xFF) * 100) / 255);
     }
 }
