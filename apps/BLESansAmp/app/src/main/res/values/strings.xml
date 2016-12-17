@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">BLESansAmp</string>
+    <string name="main_title_level">LEVEL</string>
+    <string name="main_title_hight">HIGH</string>
+    <string name="main_title_low">LOW</string>
+    <string name="main_title_volume">VOLUME</string>
 </resources>

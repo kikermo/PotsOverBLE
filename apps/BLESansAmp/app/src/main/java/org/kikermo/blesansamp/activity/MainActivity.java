@@ -6,17 +6,19 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.SeekBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.polidea.rxandroidble.RxBleClient;
 import com.polidea.rxandroidble.RxBleConnection;
 
+
 import org.kikermo.blesansamp.BLESansAmpApplication;
 import org.kikermo.blesansamp.R;
+import org.kikermo.blesansamp.model.Command;
 import org.kikermo.blesansamp.utils.Utils;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import rx.Observable;
 import rx.Subscription;
@@ -27,10 +29,10 @@ import static com.polidea.rxandroidble.RxBleConnection.RxBleConnectionState.CONN
 import static com.polidea.rxandroidble.RxBleConnection.RxBleConnectionState.DISCONNECTED;
 import static org.kikermo.blesansamp.utils.Constants.BK_DEVICE;
 import static org.kikermo.blesansamp.utils.Constants.UUID_CHARACTERISTIC;
+import static org.kikermo.blesansamp.utils.Utils.byteToPercentage;
 
 public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBarChangeListener {
-    private TextView value;
-    private SeekBar pot;
+    private SeekBar level, high, low, volume;
 
     private BluetoothDevice device;
 
@@ -48,10 +50,17 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
         setContentView(R.layout.activity_main);
         rxBleClient = ((BLESansAmpApplication) getApplication()).getRxBleClient();
 
-        value = (TextView) findViewById(R.id.value);
-        pot = ((SeekBar) findViewById(R.id.pot));
 
-        pot.setOnSeekBarChangeListener(this);
+        level = (SeekBar) findViewById(R.id.level);
+        high = (SeekBar) findViewById(R.id.high);
+        low = (SeekBar) findViewById(R.id.low);
+        volume = (SeekBar) findViewById(R.id.volume);
+
+
+        level.setOnSeekBarChangeListener(this);
+        high.setOnSeekBarChangeListener(this);
+        low.setOnSeekBarChangeListener(this);
+        volume.setOnSeekBarChangeListener(this);
 
         bleSubscription = new CompositeSubscription();
 
@@ -92,13 +101,31 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
 
     @Override
     public void onProgressChanged(SeekBar seekBar, int i, boolean fromUser) {
-        value.setText(i + "%");
+        // value.setText(i + "%");
 
         if (fromUser && connected) {
-            String msg = i + "very long messag\n";
-            byte[] data = msg.getBytes();
+            Command command = new Command();
+            command.setCmd(0x01);
+            command.setValue(Utils.percentageToByte(i));
+
+            switch (seekBar.getId()) {
+                case R.id.level:
+                    command.setAct(0);
+                    break;
+                case R.id.high:
+                    command.setAct(1);
+                    break;
+                case R.id.low:
+                    command.setAct(2);
+                    break;
+                case R.id.volume:
+                    command.setAct(3);
+                    break;
+            }
+
+
             //byte[] data = new byte[]{Utils.percentageToByte(i)};
-            Subscription writeSubs = connection.writeCharacteristic(UUID.fromString(UUID_CHARACTERISTIC), data).subscribe(o -> {
+            Subscription writeSubs = connection.writeCharacteristic(UUID.fromString(UUID_CHARACTERISTIC), command.toByteArray()).subscribe(o -> {
             }, throwable -> Log.w(TAG, throwable));
             bleSubscription.add(writeSubs);
         }
@@ -123,15 +150,31 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
 
         Subscription subscription = bleObservable
                 .doOnNext(connection -> this.connection = connection)
-                .flatMap(connection ->
-                        Observable.merge(connection.readCharacteristic(uuid),
-                                connection.setupNotification(uuid).flatMap(notificationObservable -> notificationObservable)))
+                .flatMap(connection -> {
+                    final Command cmd1 = new Command();
+                    cmd1.setCmd(0x00);
+                    cmd1.setAct(0x00);
+                    final Command cmd2 = new Command();
+                    cmd2.setCmd(0x00);
+                    cmd2.setAct(0x01);
+                    final Command cmd3 = new Command();
+                    cmd3.setCmd(0x00);
+                    cmd3.setAct(0x02);
+                    final Command cmd4 = new Command();
+                    cmd4.setCmd(0x00);
+                    cmd4.setAct(0x03);
+
+                    return Observable.merge(connection.setupNotification(uuid).flatMap(not -> not),
+                            connection.writeCharacteristic(uuid, cmd1.toByteArray()).delaySubscription(200, TimeUnit.MILLISECONDS),
+                            connection.writeCharacteristic(uuid, cmd2.toByteArray()).delaySubscription(400, TimeUnit.MILLISECONDS),
+                            connection.writeCharacteristic(uuid, cmd3.toByteArray()).delaySubscription(600, TimeUnit.MILLISECONDS),
+                            connection.writeCharacteristic(uuid, cmd4.toByteArray()).delaySubscription(800, TimeUnit.MILLISECONDS));
+                })
                 .filter(Utils::notNull)
-                .filter(bytes -> bytes.length > 0)
-                .map(bytes -> bytes[0])
-                .map(Utils::byteToPercentage)
+                .filter(bytes -> bytes.length > 2)
+                .map(Command::new)
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(progress -> pot.setProgress(progress),
+                .subscribe(this::renderCommand,
                         throwable -> Log.w(TAG, throwable));
         return subscription;
 
@@ -164,4 +207,23 @@ public class MainActivity extends AppCompatActivity implements SeekBar.OnSeekBar
     private void showToast(String msg) {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
     }
+
+    private void renderCommand(Command command) {
+        switch (command.getAct()) {
+            case 0:
+                level.setProgress(byteToPercentage((byte) command.getValue()));
+                break;
+            case 1:
+                high.setProgress(byteToPercentage((byte) command.getValue()));
+                break;
+            case 2:
+                low.setProgress(byteToPercentage((byte) command.getValue()));
+                break;
+            case 3:
+                volume.setProgress(byteToPercentage((byte) command.getValue()));
+                break;
+        }
+    }
+
+
 }
