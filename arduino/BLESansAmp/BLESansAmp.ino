@@ -20,6 +20,10 @@ const int sw2 = 2;
 const int sw3 = 4;
 const int sw4 = 6;
 
+int pot1Val = 127;
+int pot2Val = 127;
+int pot3Val = 127;
+int pot4Val = 127;
 
 const int potWriteCmd = B00010011;
 
@@ -43,12 +47,13 @@ void setup() {
   }
 
   bleSerial.begin(9600);
- 
-  digitalPotWrite(pot1CS,0);
-  digitalPotWrite(pot2CS,63);
-  digitalPotWrite(pot3CS,127);
-  digitalPotWrite(pot4CS,255);
-  
+
+  //Init pots
+  digitalPotWrite(pot1CS, pot1Val);
+  digitalPotWrite(pot2CS, pot2Val);
+  digitalPotWrite(pot3CS, pot3Val);
+  digitalPotWrite(pot4CS, pot4Val);
+
 }
 
 
@@ -56,12 +61,19 @@ void setup() {
 void loop() {
 
   if (bleSerial.available()) {
-    int val = bleSerial.read();
-    Serial.write("value = ");
-    Serial.print(val, DEC);
+    //String command  = bleSerial.readString();
+    byte command[3];
+    bleSerial.readBytesUntil('\n', command, 3);
+
+    //int val = bleSerial.read();
+    Serial.write("CMD = ");
+    Serial.print(command[0], HEX);
+    Serial.print(command[1], HEX);
+    Serial.print(command[2], HEX);
     Serial.write("\r\n");
 
-   // digitalPotWrite(pot1CS, val);
+    processCommand(command[0], command[1], command[2]);
+
   }
 
   if (Serial.available()) {
@@ -88,5 +100,67 @@ void switchWrite(int switchL, int value) {
   analogWrite(switchL, HIGH);
   analogWrite((switchL + 1), HIGH);
 
+}
+
+/**
+     | CMD  | act | val |
+     |1Byte |1Byte|1Byte|
+     | 0,1  | 0-6 |0-255|
+*/
+void processCommand(int cmd, int act, byte val ) {
+  switch (cmd) {
+    case 0://GET
+      getData(act);
+      break;
+    case 1://SET
+      setData(act, val);
+      break;
+  }
+}
+
+void getData(int act) {
+  byte resp[3];
+  resp[0] = 2; //Neither GET or SET
+  resp[1] = act;
+
+  switch (act) {
+    case 0:
+      resp[2] = pot1Val;
+      break;
+    case 1:
+      resp[2] = pot2Val;
+      break;
+    case 2:
+      resp[2] = pot3Val;
+      break;
+    case 3:
+      resp[2] = pot4Val;
+      break;
+    default:
+      return;
+  }
+
+  bleSerial.write(resp, 3);
+}
+
+void setData(int act, byte value) {
+  switch (act) {
+    case 0:
+      pot1Val = value;
+      digitalPotWrite(pot1CS, pot1Val);
+      break;
+    case 1:
+      pot2Val = value;
+      digitalPotWrite(pot2CS, pot2Val);
+      break;
+    case 2:
+      pot3Val = value;
+      digitalPotWrite(pot3CS, pot3Val);
+      break;
+    case 3:
+      pot4Val =  value;
+      digitalPotWrite(pot4CS, pot4Val);
+      break;
+  }
 }
 
